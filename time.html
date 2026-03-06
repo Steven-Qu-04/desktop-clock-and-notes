@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>时钟主页 - 唯美纯净版 (含提醒)</title>
+    <title>时钟主页 - 唯美纯净版 (含导出)</title>
     <style>
         /* ================= 基础重置与背景 ================= */
         body, html {
@@ -54,9 +54,18 @@
 
         .sidebar-header {
             padding: 25px 20px 15px; border-bottom: 1px solid rgba(255,255,255,0.1);
+            display: flex; justify-content: space-between; align-items: center;
         }
         .sidebar-header h2 { margin: 0; font-size: 1.1rem; font-weight: 300; letter-spacing: 2px; }
         
+        /* 导出按钮样式 */
+        .export-actions button {
+            background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.2);
+            padding: 4px 8px; border-radius: 6px; cursor: pointer; color: #fff;
+            font-size: 0.9rem; transition: 0.2s; margin-left: 5px;
+        }
+        .export-actions button:hover { background: rgba(255,255,255,0.3); transform: translateY(-1px); }
+
         #notes-list { flex: 1; overflow-y: auto; padding: 15px; }
         #notes-list::-webkit-scrollbar { width: 4px; }
         #notes-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 4px; }
@@ -80,7 +89,6 @@
         .sidebar-note-actions button:hover { background: rgba(255,255,255,0.25); color: #fff; }
         .sidebar-note-actions button.btn-delete:hover { background: rgba(255, 80, 80, 0.5); }
 
-        /* 提醒设置区样式 */
         .reminder-container {
             background: rgba(0,0,0,0.15); padding: 6px 8px; border-radius: 4px;
             display: flex; align-items: center; font-size: 0.8rem; gap: 6px;
@@ -88,7 +96,7 @@
         .reminder-input {
             background: transparent; border: 1px solid rgba(255,255,255,0.2); 
             color: #fff; border-radius: 4px; padding: 2px 5px; font-family: inherit; 
-            outline: none; color-scheme: dark; /* 强制唤起黑暗模式的原生时间选择器 */
+            outline: none; color-scheme: dark; 
         }
         .reminder-input:focus { border-color: rgba(255,255,255,0.6); }
 
@@ -109,7 +117,6 @@
         }
         @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
         
-        /* 提醒高亮呼吸灯特效 */
         @keyframes glowingHighlight {
             0% { box-shadow: 0 0 15px rgba(255, 215, 0, 0.3), inset 0 0 10px rgba(255, 215, 0, 0.1); border-color: rgba(255, 255, 255, 0.4); }
             100% { box-shadow: 0 0 40px rgba(255, 215, 0, 0.8), inset 0 0 25px rgba(255, 215, 0, 0.4); border-color: rgba(255, 215, 0, 0.9); }
@@ -156,6 +163,10 @@
     <div id="sidebar">
         <div class="sidebar-header">
             <h2>便签时光轴</h2>
+            <div class="export-actions">
+                <button onclick="exportToTXT()" title="导出为纯文本 (TXT)">📄</button>
+                <button onclick="exportToICS()" title="导出为日历文件 (ICS)">📅</button>
+            </div>
         </div>
         <div id="notes-list"></div>
     </div>
@@ -174,7 +185,6 @@
             document.getElementById('time').textContent = `${hours}:${minutes}`;
             document.getElementById('date-day').textContent = `${year} / ${month} / ${date}   ${day}`;
 
-            // 每秒检查一次是否有便签到期
             checkReminders();
         }
 
@@ -198,31 +208,26 @@
             sidebarToggle.innerHTML = isOpen ? '›' : '‹'; 
         });
 
-        // 定时提醒检查器
         function checkReminders() {
             const currentMs = Date.now();
             let needsRender = false;
 
             notes.forEach(note => {
                 if (note.reminderTime && note.reminderTime <= currentMs) {
-                    note.isHidden = false;         // 强制显示
-                    note.isHighlighted = true;     // 开启高亮
-                    note.reminderTime = null;      // 消耗掉提醒，防止重复触发
+                    note.isHidden = false;         
+                    note.isHighlighted = true;     
+                    note.reminderTime = null;      
                     
                     highestZIndex++;
-                    note.zIndex = highestZIndex;   // 置顶
+                    note.zIndex = highestZIndex;   
                     
                     needsRender = true;
                 }
             });
 
-            if (needsRender) {
-                saveNotes();
-                renderAll();
-            }
+            if (needsRender) { saveNotes(); renderAll(); }
         }
 
-        // 全局交互与取消高亮
         workspace.addEventListener('mousedown', (e) => {
             const noteEl = e.target.closest('.sticky-note');
             if (!noteEl) return; 
@@ -231,12 +236,11 @@
             const note = notes.find(n => n.id === noteId);
             if (!note) return;
 
-            // 点击时自动消除提醒高亮
             if (note.isHighlighted) {
                 note.isHighlighted = false;
                 noteEl.classList.remove('highlighted');
                 saveNotes();
-                renderSidebar(); // 更新侧边栏状态
+                renderSidebar(); 
             }
 
             highestZIndex++;
@@ -280,38 +284,23 @@
             if (e.target.tagName === 'TEXTAREA') {
                 const noteEl = e.target.closest('.sticky-note');
                 const note = notes.find(n => n.id === noteEl.dataset.id);
-                if (note) {
-                    note.text = e.target.value;
-                    saveNotes();
-                }
+                if (note) { note.text = e.target.value; saveNotes(); }
             }
         });
 
         workspace.addEventListener('dblclick', (e) => {
             if (e.target.closest('.sticky-note')) return;
-
             const now = new Date();
             const timeString = `${now.getFullYear()}/${now.getMonth()+1}/${now.getDate()} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
-            
             highestZIndex++;
 
             const newNote = {
                 id: Date.now().toString(36) + Math.random().toString(36).substring(2),
-                text: '',
-                createdAt: timeString,
-                timestamp: Date.now(),
-                isHidden: false,
-                isHighlighted: false,    // 新增状态：是否处于高亮提醒中
-                reminderTime: null,      // 新增状态：提醒时间戳
-                x: e.clientX, 
-                y: e.clientY, 
-                width: 220,
-                height: 160,
-                zIndex: highestZIndex
+                text: '', createdAt: timeString, timestamp: Date.now(),
+                isHidden: false, isHighlighted: false, reminderTime: null,
+                x: e.clientX, y: e.clientY, width: 220, height: 160, zIndex: highestZIndex
             };
-            notes.push(newNote);
-            saveNotes();
-            renderAll();
+            notes.push(newNote); saveNotes(); renderAll();
         });
 
         const noteResizeObserver = new ResizeObserver(entries => {
@@ -333,27 +322,19 @@
             renderAll();
         }
 
-        function saveNotes() {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(notes));
-        }
+        function saveNotes() { localStorage.setItem(STORAGE_KEY, JSON.stringify(notes)); }
 
-        function renderAll() {
-            renderWorkspace();
-            renderSidebar();
-        }
+        function renderAll() { renderWorkspace(); renderSidebar(); }
 
         function renderWorkspace() {
             noteResizeObserver.disconnect();
             workspace.innerHTML = '';
-            
             notes.filter(n => !n.isHidden).forEach(note => {
                 const noteEl = document.createElement('div');
                 noteEl.className = 'sticky-note' + (note.isHighlighted ? ' highlighted' : '');
                 noteEl.dataset.id = note.id;
-                noteEl.style.left = note.x + 'px';
-                noteEl.style.top = note.y + 'px';
+                noteEl.style.left = note.x + 'px'; noteEl.style.top = note.y + 'px';
                 noteEl.style.zIndex = note.zIndex || 10; 
-                
                 if((note.zIndex || 10) > highestZIndex) highestZIndex = note.zIndex || 10;
 
                 noteEl.innerHTML = `
@@ -368,13 +349,11 @@
                         <textarea placeholder="记点什么..." style="width:${note.width}px; height:${note.height}px">${note.text}</textarea>
                     </div>
                 `;
-
                 noteResizeObserver.observe(noteEl.querySelector('textarea'));
                 workspace.appendChild(noteEl);
             });
         }
 
-        // 格式化时间戳，供 input[type="datetime-local"] 使用 (格式: YYYY-MM-DDThh:mm)
         function formatForInput(ms) {
             if (!ms) return '';
             const d = new Date(ms);
@@ -385,7 +364,6 @@
         function renderSidebar() {
             notesList.innerHTML = '';
             const sortedNotes = [...notes].sort((a, b) => b.timestamp - a.timestamp);
-            
             if(sortedNotes.length === 0) {
                 notesList.innerHTML = '<p style="color:rgba(255,255,255,0.4); text-align:center; font-weight:300; margin-top:40px;">尚未创建便签</p>';
                 return;
@@ -395,8 +373,6 @@
                 const el = document.createElement('div');
                 el.className = 'sidebar-note-item';
                 const previewText = note.text.trim() === '' ? '[空便签]' : note.text.substring(0, 25) + '...';
-                
-                // 渲染日期组件
                 const timeValue = formatForInput(note.reminderTime);
                 
                 el.innerHTML = `
@@ -421,43 +397,111 @@
             });
         }
 
-        // 外部调用的功能函数
         window.hideNote = function(id) {
             const note = notes.find(n => n.id === id);
             if(note) { note.isHidden = true; saveNotes(); renderWorkspace(); renderSidebar(); }
         }
-
         window.restoreNote = function(id) {
             const note = notes.find(n => n.id === id);
             if(note) { note.isHidden = false; saveNotes(); renderWorkspace(); renderSidebar(); }
         }
-
         window.deleteNote = function(id) {
             if(confirm('确定要彻底删除这条便签吗？')) {
                 notes = notes.filter(n => n.id !== id);
                 saveNotes(); renderAll();
             }
         }
-
         window.setReminder = function(id, value) {
             const note = notes.find(n => n.id === id);
             if (note) {
                 if (value) {
                     note.reminderTime = new Date(value).getTime();
-                    note.isHighlighted = false; // 重新设定时间时关闭高亮
+                    note.isHighlighted = false; 
                 } else {
                     note.reminderTime = null;
                 }
-                saveNotes();
-                renderSidebar();
+                saveNotes(); renderSidebar();
             }
+        }
+
+        // ================= 导出功能逻辑 =================
+        function triggerDownload(content, filename, type) {
+            const blob = new Blob([content], { type: type });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        window.exportToTXT = function() {
+            if (notes.length === 0) { alert('没有便签可导出！'); return; }
+            let txtContent = "=== 我的唯美便签 ===\n\n";
+            const sortedNotes = [...notes].sort((a, b) => b.timestamp - a.timestamp);
+            
+            sortedNotes.forEach(note => {
+                txtContent += `[创建时间]: ${note.createdAt}\n`;
+                if (note.reminderTime) {
+                    const rDate = new Date(note.reminderTime);
+                    txtContent += `[提醒时间]: ${rDate.getFullYear()}/${rDate.getMonth()+1}/${rDate.getDate()} ${String(rDate.getHours()).padStart(2,'0')}:${String(rDate.getMinutes()).padStart(2,'0')}\n`;
+                }
+                txtContent += `[内容]:\n${note.text || '（空）'}\n`;
+                txtContent += `---------------------------------------\n\n`;
+            });
+
+            triggerDownload(txtContent, '我的便签导出.txt', 'text/plain;charset=utf-8');
+        }
+
+        // 格式化日期为 ICS 要求的标准 (YYYYMMDDTHHMMSS)
+        function formatToICSDT(ms) {
+            const d = new Date(ms);
+            const pad = n => String(n).padStart(2, '0');
+            return `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}T${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+        }
+
+        window.exportToICS = function() {
+            if (notes.length === 0) { alert('没有便签可导出！'); return; }
+            
+            let icsContent = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//MyAestheticNotes//CN\r\nCALSCALE:GREGORIAN\r\n";
+            
+            notes.forEach(note => {
+                // 如果有提醒时间就用提醒时间作为日程，否则用创建时间
+                const startTimeMs = note.reminderTime ? note.reminderTime : note.timestamp;
+                const dtStart = formatToICSDT(startTimeMs);
+                // 默认日程时长设为 1 小时
+                const dtEnd = formatToICSDT(startTimeMs + 3600000);
+                
+                // 将换行符转义为 ICS 支持的格式
+                const summary = note.text.trim() === '' ? '空便签' : note.text.substring(0, 20).replace(/\n/g, ' ');
+                const description = note.text.replace(/\n/g, '\\n');
+
+                icsContent += "BEGIN:VEVENT\r\n";
+                icsContent += `UID:${note.id}@myaestheticnotes\r\n`;
+                icsContent += `DTSTAMP:${formatToICSDT(Date.now())}Z\r\n`;
+                icsContent += `DTSTART:${dtStart}\r\n`;
+                icsContent += `DTEND:${dtEnd}\r\n`;
+                icsContent += `SUMMARY:${summary}\r\n`;
+                icsContent += `DESCRIPTION:${description}\r\n`;
+                
+                // 如果设置了提醒，在日历文件中加入闹钟提醒触发器（提前 0 分钟触发）
+                if (note.reminderTime) {
+                    icsContent += "BEGIN:VALARM\r\nACTION:DISPLAY\r\nDESCRIPTION:便签提醒\r\nTRIGGER:-PT0M\r\nEND:VALARM\r\n";
+                }
+                icsContent += "END:VEVENT\r\n";
+            });
+            
+            icsContent += "END:VCALENDAR";
+            triggerDownload(icsContent, '我的便签日历.ics', 'text/calendar;charset=utf-8');
         }
 
         // 启动时钟与初始化
         updateClock(); 
-        setInterval(updateClock, 1000); // 时钟和巡视器共用一个定时器
+        setInterval(updateClock, 1000); 
         initNotes();
     </script>
 
 </body>
-</html>
+</html
