@@ -112,9 +112,12 @@
             color: #fff; border-radius: 12px; 
             display: flex; flex-direction: column; pointer-events: auto;
             min-width: 180px; min-height: 120px;
+            resize: both; overflow: auto;
             transition: box-shadow 0.3s, border-color 0.3s;
             animation: fadeIn 0.3s ease-out;
+            scrollbar-width: none;
         }
+        .sticky-note::-webkit-scrollbar { width: 0; height: 0; }
         @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
         
         @keyframes glowingHighlight {
@@ -139,10 +142,12 @@
 
         .note-body { flex: 1; padding: 12px 15px; display: flex; flex-direction: column; }
         .note-body textarea {
-            flex: 1; border: none; background: transparent; resize: both; 
+            flex: 1; border: none; background: transparent; resize: none; 
             outline: none; font-family: inherit; font-size: 1rem; font-weight: 300; color: #fff; 
             line-height: 1.6; text-shadow: 0 1px 2px rgba(0,0,0,0.2);
-            min-width: 150px; min-height: 80px;
+            min-width: 0; min-height: 80px;
+            width: 100%; height: 100%;
+            box-sizing: border-box;
         }
         .note-body textarea::placeholder { color: rgba(255,255,255,0.4); }
         .note-body textarea::-webkit-scrollbar { width: 0px; } 
@@ -305,12 +310,12 @@
 
         const noteResizeObserver = new ResizeObserver(entries => {
             for (let entry of entries) {
-                const noteEl = entry.target.closest('.sticky-note');
+                const noteEl = entry.target;
                 if (!noteEl) continue;
                 const note = notes.find(n => n.id === noteEl.dataset.id);
                 if (note) {
-                    note.width = entry.target.offsetWidth;
-                    note.height = entry.target.offsetHeight;
+                    note.width = Math.round(entry.contentRect.width);
+                    note.height = Math.round(entry.contentRect.height);
                     saveNotes();
                 }
             }
@@ -334,6 +339,8 @@
                 noteEl.className = 'sticky-note' + (note.isHighlighted ? ' highlighted' : '');
                 noteEl.dataset.id = note.id;
                 noteEl.style.left = note.x + 'px'; noteEl.style.top = note.y + 'px';
+                noteEl.style.width = (note.width || 220) + 'px';
+                noteEl.style.height = (note.height || 160) + 'px';
                 noteEl.style.zIndex = note.zIndex || 10; 
                 if((note.zIndex || 10) > highestZIndex) highestZIndex = note.zIndex || 10;
 
@@ -346,11 +353,11 @@
                         </div>
                     </div>
                     <div class="note-body">
-                        <textarea placeholder="记点什么..." style="width:${note.width}px; height:${note.height}px">${note.text}</textarea>
+                        <textarea placeholder="记点什么...">${note.text}</textarea>
                     </div>
                 `;
-                noteResizeObserver.observe(noteEl.querySelector('textarea'));
                 workspace.appendChild(noteEl);
+                noteResizeObserver.observe(noteEl);
             });
         }
 
@@ -462,18 +469,20 @@
             return `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}T${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
         }
 
+        function formatToICSDate(date) {
+            const pad = n => String(n).padStart(2, '0');
+            return `${date.getFullYear()}${pad(date.getMonth()+1)}${pad(date.getDate())}`;
+        }
+
         window.exportToICS = function() {
             if (notes.length === 0) { alert('没有便签可导出！'); return; }
             
             let icsContent = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//MyAestheticNotes//CN\r\nCALSCALE:GREGORIAN\r\n";
+            const exportDay = new Date();
+            const exportDayStart = new Date(exportDay.getFullYear(), exportDay.getMonth(), exportDay.getDate());
+            const exportDayEnd = new Date(exportDayStart.getTime() + 24 * 60 * 60 * 1000);
             
             notes.forEach(note => {
-                // 如果有提醒时间就用提醒时间作为日程，否则用创建时间
-                const startTimeMs = note.reminderTime ? note.reminderTime : note.timestamp;
-                const dtStart = formatToICSDT(startTimeMs);
-                // 默认日程时长设为 1 小时
-                const dtEnd = formatToICSDT(startTimeMs + 3600000);
-                
                 // 将换行符转义为 ICS 支持的格式
                 const summary = note.text.trim() === '' ? '空便签' : note.text.substring(0, 20).replace(/\n/g, ' ');
                 const description = note.text.replace(/\n/g, '\\n');
@@ -481,8 +490,15 @@
                 icsContent += "BEGIN:VEVENT\r\n";
                 icsContent += `UID:${note.id}@myaestheticnotes\r\n`;
                 icsContent += `DTSTAMP:${formatToICSDT(Date.now())}Z\r\n`;
-                icsContent += `DTSTART:${dtStart}\r\n`;
-                icsContent += `DTEND:${dtEnd}\r\n`;
+                if (note.reminderTime) {
+                    const dtStart = formatToICSDT(note.reminderTime);
+                    const dtEnd = formatToICSDT(note.reminderTime + 3600000);
+                    icsContent += `DTSTART:${dtStart}\r\n`;
+                    icsContent += `DTEND:${dtEnd}\r\n`;
+                } else {
+                    icsContent += `DTSTART;VALUE=DATE:${formatToICSDate(exportDayStart)}\r\n`;
+                    icsContent += `DTEND;VALUE=DATE:${formatToICSDate(exportDayEnd)}\r\n`;
+                }
                 icsContent += `SUMMARY:${summary}\r\n`;
                 icsContent += `DESCRIPTION:${description}\r\n`;
                 
