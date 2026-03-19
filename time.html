@@ -11,14 +11,70 @@
             font-family: "Helvetica Neue", Helvetica, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
             color: #ffffff; overflow: hidden;
             background-image: url('Gemini_Generated_Image_q1twsnq1twsnq1tw.png');
-            background-size: cover; background-position: center; background-repeat: no-repeat;
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
         }
 
         .overlay {
             height: 100%; width: 100%;
-            background-color: rgba(0, 0, 0, 0.2); 
+            background-color: rgba(0, 0, 0, 0.18); 
             display: flex; flex-direction: column; justify-content: center; align-items: center;
             position: relative;
+        }
+
+        #monitor-switcher {
+            position: fixed;
+            left: 18px;
+            top: 18px;
+            z-index: 1100;
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            padding: 10px 12px;
+            border-radius: 12px;
+            background: rgba(10, 10, 10, 0.22);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            border: 1px solid rgba(255,255,255,0.14);
+        }
+        #monitor-switcher.hidden { display: none; }
+        #monitor-switcher span {
+            font-size: 0.8rem;
+            color: rgba(255,255,255,0.8);
+            letter-spacing: 1px;
+        }
+        #monitor-buttons { display: flex; gap: 6px; }
+        #monitor-buttons button {
+            min-width: 34px;
+            height: 32px;
+            border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.18);
+            background: rgba(255,255,255,0.10);
+            color: #fff;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        #monitor-buttons button:hover {
+            background: rgba(255,255,255,0.22);
+        }
+        #monitor-buttons button.active {
+            background: rgba(255,255,255,0.32);
+            border-color: rgba(255,255,255,0.45);
+        }
+        #quit-button {
+            min-width: 48px;
+            height: 32px;
+            border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.18);
+            background: rgba(255,255,255,0.10);
+            color: #fff;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        #quit-button:hover {
+            background: rgba(255, 100, 100, 0.26);
+            border-color: rgba(255, 150, 150, 0.45);
         }
 
         /* ================= 时钟样式 ================= */
@@ -156,6 +212,11 @@
 <body>
 
     <div class="overlay">
+        <div id="monitor-switcher" class="hidden">
+            <span>屏幕</span>
+            <div id="monitor-buttons"></div>
+            <button id="quit-button" type="button">退出</button>
+        </div>
         <div class="clock-container">
             <div class="time" id="time">00:00</div>
             <div class="date-day" id="date-day">0000 / 00 / 00   星期一</div>
@@ -196,6 +257,22 @@
         // ================= 便签系统逻辑 =================
         let notes = [];
         const STORAGE_KEY = 'my_aesthetic_notes';
+        const RECOVERED_NOTES = [
+            {
+                id: 'mmcuiuahgcxdzap13cq',
+                text: '厚德载物',
+                createdAt: '2026/3/5 10:28',
+                timestamp: new Date(2026, 2, 5, 10, 28).getTime(),
+                isHidden: false,
+                isHighlighted: false,
+                reminderTime: null,
+                x: 347,
+                y: 642,
+                width: 220,
+                height: 160,
+                zIndex: 87
+            }
+        ];
         let highestZIndex = 10; 
         
         let draggingNoteId = null;
@@ -206,12 +283,61 @@
         const notesList = document.getElementById('notes-list');
         const sidebar = document.getElementById('sidebar');
         const sidebarToggle = document.getElementById('sidebar-toggle');
+        const monitorSwitcher = document.getElementById('monitor-switcher');
+        const monitorButtons = document.getElementById('monitor-buttons');
+        const quitButton = document.getElementById('quit-button');
+        const hostBridge = window.chrome && window.chrome.webview ? window.chrome.webview : null;
 
         sidebarToggle.addEventListener('click', () => {
             const isOpen = sidebar.classList.toggle('open');
             sidebarToggle.classList.toggle('open');
             sidebarToggle.innerHTML = isOpen ? '›' : '‹'; 
         });
+
+        function renderMonitorButtons(monitors, activeIndex) {
+            if (!hostBridge || !Array.isArray(monitors) || monitors.length === 0) {
+                monitorSwitcher.classList.add('hidden');
+                monitorButtons.innerHTML = '';
+                return;
+            }
+
+            monitorSwitcher.classList.remove('hidden');
+            monitorButtons.innerHTML = '';
+
+            const allButton = document.createElement('button');
+            allButton.textContent = '双屏';
+            allButton.className = activeIndex === 0 ? 'active' : '';
+            allButton.title = '同时显示在所有屏幕';
+            allButton.addEventListener('click', () => {
+                hostBridge.postMessage({ type: 'move-to-monitor', index: 0 });
+            });
+            monitorButtons.appendChild(allButton);
+
+            monitors.forEach(monitor => {
+                const button = document.createElement('button');
+                button.textContent = monitor.label || String(monitor.index);
+                button.className = monitor.index === activeIndex ? 'active' : '';
+                button.title = monitor.name || '';
+                button.addEventListener('click', () => {
+                    hostBridge.postMessage({ type: 'move-to-monitor', index: monitor.index });
+                });
+                monitorButtons.appendChild(button);
+            });
+        }
+
+        if (hostBridge) {
+            quitButton.addEventListener('click', () => {
+                hostBridge.postMessage({ type: 'quit-app' });
+            });
+            hostBridge.addEventListener('message', event => {
+                const data = event.data || {};
+                if (data.type === 'monitor-info') {
+                    renderMonitorButtons(data.monitors, data.activeIndex);
+                }
+            });
+        } else {
+            quitButton.style.display = 'none';
+        }
 
         function checkReminders() {
             const currentMs = Date.now();
@@ -321,9 +447,34 @@
             }
         });
 
+        function mergeRecoveredNotes(existingNotes) {
+            const normalizedNotes = Array.isArray(existingNotes) ? existingNotes : [];
+            const existingIds = new Set(normalizedNotes.map(note => note.id));
+            let changed = false;
+
+            RECOVERED_NOTES.forEach(note => {
+                if (!existingIds.has(note.id)) {
+                    normalizedNotes.push({ ...note });
+                    existingIds.add(note.id);
+                    changed = true;
+                }
+            });
+
+            return { notes: normalizedNotes, changed };
+        }
+
         function initNotes() {
             const saved = localStorage.getItem(STORAGE_KEY);
-            if (saved) notes = JSON.parse(saved);
+            if (saved) {
+                try {
+                    notes = JSON.parse(saved);
+                } catch (error) {
+                    notes = [];
+                }
+            }
+            const mergeResult = mergeRecoveredNotes(notes);
+            notes = mergeResult.notes;
+            if (mergeResult.changed) saveNotes();
             renderAll();
         }
 
@@ -517,6 +668,9 @@
         updateClock(); 
         setInterval(updateClock, 1000); 
         initNotes();
+        if (hostBridge) {
+            hostBridge.postMessage({ type: 'get-monitor-info' });
+        }
     </script>
 
 </body>
